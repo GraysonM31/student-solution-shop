@@ -24,12 +24,14 @@ import api from '../lib/api';
 import { DraggableCard } from '../components/DraggableCard';
 import { DraggableContainer } from '../components/DraggableContainer';
 import { DragEndEvent } from '@dnd-kit/core';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
   createdAt: string;
+  userId: string;
 }
 
 export default function Todo() {
@@ -38,13 +40,16 @@ export default function Todo() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isReorderMode, setIsReorderMode] = useState(false);
   const toast = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
-    fetchTodos();
-    // Add a small delay to show the loading animation
-    const timer = setTimeout(() => setIsLoaded(true), 250);
-    return () => clearTimeout(timer);
-  }, []);
+    if (user) {
+      fetchTodos();
+      // Add a small delay to show the loading animation
+      const timer = setTimeout(() => setIsLoaded(true), 250);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
 
   const fetchTodos = async () => {
     try {
@@ -60,7 +65,7 @@ export default function Todo() {
   };
 
   const addTodo = async () => {
-    if (!newTodo.trim()) return;
+    if (!newTodo.trim() || !user) return;
 
     try {
       const response = await api.post('/todos', {
@@ -84,6 +89,8 @@ export default function Todo() {
   };
 
   const toggleTodo = async (id: string, completed: boolean) => {
+    if (!user) return;
+
     try {
       await api.put(`/todos/${id}`, { completed: !completed });
       setTodos(
@@ -101,6 +108,8 @@ export default function Todo() {
   };
 
   const deleteTodo = async (id: string) => {
+    if (!user) return;
+
     try {
       await api.delete(`/todos/${id}`);
       setTodos(todos.filter((todo) => todo.id !== id));

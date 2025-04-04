@@ -23,6 +23,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautif
 import { ViewIcon, ViewOffIcon, AddIcon, DeleteIcon, TimeIcon } from '@chakra-ui/icons';
 import MindMap from '../components/MindMap';
 import api from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Todo {
   id: string;
@@ -30,6 +31,7 @@ interface Todo {
   completed: boolean;
   createdAt: string;
   status: 'todo' | 'in-progress' | 'completed';
+  userId: string;
 }
 
 interface Task {
@@ -66,12 +68,15 @@ const Planner = () => {
   const [newTodo, setNewTodo] = useState('');
   const [viewMode, setViewMode] = useState<'kanban' | 'mindmap'>('kanban');
   const toast = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoaded(true), 250);
-    fetchTodos();
-    return () => clearTimeout(timer);
-  }, []);
+    if (user) {
+      const timer = setTimeout(() => setIsLoaded(true), 250);
+      fetchTodos();
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
 
   const fetchTodos = async () => {
     try {
@@ -83,7 +88,7 @@ const Planner = () => {
   };
 
   const addTodo = async () => {
-    if (!newTodo.trim()) return;
+    if (!newTodo.trim() || !user) return;
 
     try {
       const response = await api.post('/todos', {
@@ -108,6 +113,8 @@ const Planner = () => {
   };
 
   const toggleTodo = async (id: string, completed: boolean) => {
+    if (!user) return;
+
     try {
       const newCompleted = !completed;
       const newStatus = newCompleted ? 'completed' : 'todo';
@@ -134,6 +141,8 @@ const Planner = () => {
   };
 
   const updateTodoStatus = async (id: string, newStatus: Todo['status']) => {
+    if (!user) return;
+
     try {
       await api.put(`/todos/${id}`, { status: newStatus });
       setTodos(
@@ -151,6 +160,8 @@ const Planner = () => {
   };
 
   const deleteTodo = async (id: string) => {
+    if (!user) return;
+
     try {
       await api.delete(`/todos/${id}`);
       setTodos(todos.filter((todo) => todo.id !== id));
@@ -169,6 +180,8 @@ const Planner = () => {
   };
 
   const moveToInProgress = async (id: string) => {
+    if (!user) return;
+
     try {
       await api.put(`/todos/${id}`, { 
         status: 'in-progress',
