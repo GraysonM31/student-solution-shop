@@ -1,14 +1,20 @@
 import { Router } from 'express';
 import { getFirestore } from 'firebase-admin/firestore';
+import { authenticateUser } from '../middleware/auth';
 
 const router = Router();
 const db = getFirestore();
 
-// Get all todos
-router.get('/', async (req, res) => {
+// Get all todos for the authenticated user
+router.get('/', authenticateUser, async (req, res) => {
   try {
-    console.log('Attempting to fetch todos...');
-    const todosSnapshot = await db.collection('todos').get();
+    console.log('Attempting to fetch todos for user:', req.user.uid);
+    const todosSnapshot = await db
+      .collection('users')
+      .doc(req.user.uid)
+      .collection('todos')
+      .get();
+    
     const todos = todosSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -21,10 +27,15 @@ router.get('/', async (req, res) => {
 });
 
 // Get a single todo by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateUser, async (req, res) => {
   try {
     const { id } = req.params;
-    const todoDoc = await db.collection('todos').doc(id).get();
+    const todoDoc = await db
+      .collection('users')
+      .doc(req.user.uid)
+      .collection('todos')
+      .doc(id)
+      .get();
     
     if (!todoDoc.exists) {
       return res.status(404).json({ error: 'Todo not found' });
@@ -41,22 +52,31 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create a new todo
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, async (req, res) => {
   try {
     console.log('Attempting to create todo with data:', req.body);
     const { text, completed = false, status = 'todo' } = req.body;
-    const docRef = await db.collection('todos').add({
+    
+    const todoRef = db
+      .collection('users')
+      .doc(req.user.uid)
+      .collection('todos')
+      .doc();
+
+    const todoData = {
       text,
       completed,
       status,
+      userId: req.user.uid,
       createdAt: new Date()
-    });
-    console.log('Todo created successfully with ID:', docRef.id);
+    };
+
+    await todoRef.set(todoData);
+    
+    console.log('Todo created successfully with ID:', todoRef.id);
     res.status(201).json({
-      id: docRef.id,
-      text,
-      completed,
-      status
+      id: todoRef.id,
+      ...todoData
     });
   } catch (error) {
     console.error('Error creating todo:', error);
@@ -65,10 +85,22 @@ router.post('/', async (req, res) => {
 });
 
 // Update a todo
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateUser, async (req, res) => {
   try {
     const { id } = req.params;
     const { text, completed, status } = req.body;
+    
+    const todoRef = db
+      .collection('users')
+      .doc(req.user.uid)
+      .collection('todos')
+      .doc(id);
+
+    const todoDoc = await todoRef.get();
+    if (!todoDoc.exists) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
     const updateData: any = {
       updatedAt: new Date()
     };
@@ -78,18 +110,34 @@ router.put('/:id', async (req, res) => {
     if (completed !== undefined) updateData.completed = completed;
     if (status !== undefined) updateData.status = status;
 
-    await db.collection('todos').doc(id).update(updateData);
-    res.json({ id, ...updateData });
+    await todoRef.update(updateData);
+    res.json({ 
+      id,
+      ...todoDoc.data(),
+      ...updateData
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update todo' });
   }
 });
 
 // Delete a todo
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateUser, async (req, res) => {
   try {
     const { id } = req.params;
-    await db.collection('todos').doc(id).delete();
+    
+    const todoRef = db
+      .collection('users')
+      .doc(req.user.uid)
+      .collection('todos')
+      .doc(id);
+
+    const todoDoc = await todoRef.get();
+    if (!todoDoc.exists) {
+      return res.status(404).json({ error: 'Todo not found' });
+    }
+
+    await todoRef.delete();
     res.json({ id });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete todo' });
